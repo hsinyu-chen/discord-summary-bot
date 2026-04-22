@@ -3,6 +3,8 @@
 一個以 .NET 10 撰寫的 Discord Bot，接收使用者指令後呼叫 Google Gemini 對 YouTube 影片或網頁內容進行摘要。附帶一個 Blazor Server 的後台 (AdminInterface) 管理使用者與額度。
 
 > 這是內部專案。README 只描述現況，不涵蓋未實作的功能。
+>
+> **狀態**：Bot 主程式可用。後台 (AdminInterface) 目前仍 **WIP**，登入 / Passkey / 使用者與額度管理等頁面只有部分能動，不建議直接拿去給終端使用者用。
 
 ## 專案組成
 
@@ -24,13 +26,22 @@ Solution 內分成幾個專案：
 - PostgreSQL (一個主資料庫 + 一個寫 Serilog log 的資料庫，可以是同一台)
 - Google Gemini API Key
 - Discord Bot Token
-- Playwright 會在首次執行時下載 Chromium；Docker image 使用官方 `playwright/dotnet` 作為 runtime base
+- **Playwright + Chromium**：`WebCaptureService` 用 Playwright 抓網頁內容（含繞過部分 bot 偵測的 patch），所以本機第一次跑之前要先裝 browser。先 build 一次，然後執行 Playwright 的安裝 script：
+
+  ```bash
+  dotnet build SummaryAndCheck
+  pwsh SummaryAndCheck/bin/Debug/net10.0/playwright.ps1 install chromium
+  # 或 Linux/Mac：
+  # ./SummaryAndCheck/bin/Debug/net10.0/playwright.sh install chromium
+  ```
+
+  沒裝的話跑起來會在第一次呼叫網頁摘要時噴錯。Docker image 不需要這步，因為 base image 已經內建 browser（見下方 [Docker](#docker)）。
 
 ## 組態
 
 組態分成三層：
 
-1. **連線字串**：`appsettings.json` 內的 `ConnectionStrings:Postgres` 與 `ConnectionStrings:PostgresLog`。預設值指向開發用的主機，本機請用 `local.json`（已被 csproj 設定為 `CopyToOutputDirectory`，git 內已提交，但建議實務上將真正的 secret 放在 user-secrets 或環境變數）覆寫。
+1. **連線字串**：`appsettings.json` 內的 `ConnectionStrings:Postgres` 與 `ConnectionStrings:PostgresLog`。公開 repo 這兩個值是空字串，請用 `local.json`、user-secrets 或 `ConnectionStrings__Postgres` 環境變數覆寫。`local.json` 已被 csproj 設定 `CopyToOutputDirectory`，放本機連線不會被不小心漏掉。
 2. **本地化字串**：`local.json` 與 `local.zh-TW.json`。格式見檔案內容，走 `Hcs.LightI18n`。
 3. **執行期參數 (Gemini / Discord)**：存在 Postgres 的 `SystemConfig` 表。Scope = Options 類別名稱，Key = 屬性名稱。需要先手動 insert：
 
@@ -69,13 +80,15 @@ dotnet ef database update       -p SummaryAndCheck.Models -s SummaryAndCheck
 dotnet run --project SummaryAndCheck
 ```
 
-### 後台
+### 後台 (WIP)
 
 ```bash
 dotnet run --project AdminInterface
 ```
 
-預設走 Cookie 驗證，登入頁 `/LoginPage`，支援 Passkey (WebAuthn)。與 Bot 共用同一個 Postgres。
+預設走 Cookie 驗證，登入頁 `/LoginPage`，計畫用 Passkey (WebAuthn)。與 Bot 共用同一個 Postgres。
+
+目前還在施工中 — 頁面結構、登入流程、SystemConfig 編輯頁面都只有雛形，不要當成完成品。
 
 ### AntiBot 除錯模式
 
@@ -87,7 +100,14 @@ dotnet run --project SummaryAndCheck -c AntiBot
 
 ## Docker
 
-`Dockerfile` 在 repo 根目錄，multi-stage：SDK 編譯 → Playwright 官方 image 作 runtime（已含 browser 依賴）。
+`Dockerfile` 在 repo 根目錄。會比一般 .NET 的 Dockerfile 長，是為了處理 Playwright 的依賴，結構大致是：
+
+1. **Build stage**：`mcr.microsoft.com/dotnet/sdk:10.0` 編譯 & `dotnet publish`。
+2. **Runtime stage**：`mcr.microsoft.com/playwright/dotnet:v1.58.0-noble`。這個 base 已經包含 Chromium 和所有系統依賴 (fonts、X libs 等)，省掉自己裝 browser 的麻煩。
+3. 但 Playwright 官方 image 只附 .NET runtime 9（截至 `v1.58.0-noble`），本專案目標是 .NET 10，所以用 `dotnet-install.sh` 把 .NET 10 runtime 裝到 `/usr/share/dotnet`。
+4. 用 root 執行上述安裝後，把 `/app` 的 owner 改回 base image 內建的 `pwuser` 再切過去跑。
+
+如果之後升級到 Playwright 官方支援 .NET 10 的 image tag，就可以把第 3 步整段拿掉。
 
 手動建：
 
