@@ -20,6 +20,69 @@ Solution 內分成幾個專案：
 | [Hcs.LightI18n.AspNetCore/](Hcs.LightI18n.AspNetCore/) | Class Library | LightI18n 的 ASP.NET Core 整合。 |
 | [Hcs.LightI18n.Tests/](Hcs.LightI18n.Tests/) | xUnit | LightI18n 的測試。 |
 
+## 系統架構
+
+整體是一個典型的 .NET Generic Host，靠兩個 `HostedService` 驅動：一個接 Discord 事件進來、一個把佇列裡的工作送去 Gemini。中間的 `SummaryQueue` 是 singleton，負責去重 / 排隊 / 限流。
+
+```
+Discord user
+    │  (slash or message command)
+    ▼
+DiscordService (IHostedService, singleton)
+    │  分派到對應的 Command 類別
+    ▼
+DiscordCommand/*Command.cs      ← 解析 URL / YouTube ID，只做輸入驗證
+    │
+    ▼
+SummaryService (scoped)         ← 檢查帳號 IsEnabled、扣 Credit 或判定
+    │                             30 分鐘免費使用間隔、寫 CreditHistory
+    │
+    ▼
+SummaryQueue (singleton)        ← 以 SummaryContext 為 key 去重；
+    │                             成功的結果放 1 小時 IMemoryCache
+    │
+    │  (GeminiTaskScheduleService 輪詢)
+    ▼
+GeminiTaskScheduleService       ← BackgroundService，50ms 輪詢；
+    │                             SemaphoreSlim 限制同時 2 個任務、
+    │                             每個任務最多 5 分鐘硬超時
+    │
+    ▼
+GeminiService (scoped)          ← 組 prompt、streaming 呼叫 Gemini、
+    │                             計算 token 成本、回寫 Discord
+    │
+    ├─► WebCaptureService       ← 網頁型：Playwright + Readability.js
+    │                             擷取正文（WebCapturePatches 處理
+    │                             反爬蟲偵測）
+    │
+    └─► Gemini API              ← 影片型：直接把 YouTube URL 當 FileData
+                                  傳給 Gemini（利用官方的影片原生支援）
+```
+
+### 主要角色
+
+- **[Program.cs](SummaryAndCheck/Program.cs)** — Host 組裝、DI 註冊、Serilog（含 Postgres sink）設定、讀 appsettings + `local.json`。`DiscordCommandTypes.CommandTypes` 用反射掃所有標了 `[DiscordCommand<TRegister>]` 的類別，一併註冊到 DI。
+- **[Main.cs](SummaryAndCheck/Main.cs)** — Host 起來後呼叫一次，目前只負責 `EnsureCreatedAsync()` 建表。
+- **[DiscordService.cs](SummaryAndCheck/Services/DiscordService.cs)** — 封裝 `DiscordSocketClient`，在 `Ready` 事件裡把所有 command 向 Discord 註冊 (`CreateGlobalApplicationCommandAsync`)；收到 `SlashCommandExecuted` / `MessageCommandExecuted` 時查表路由到對應的 `IDiscordSlashCommand` / `IDiscordMessageCommand`。
+- **[SummaryQueue.cs](SummaryAndCheck/Services/SummaryQueue.cs)** — 同時維護一個 `ConcurrentQueue`（待取出的工作）與一個 `ConcurrentDictionary`（以 `SummaryContext` 為 key 的去重表）。如果同一個 YouTube 影片/URL 同時有多人請求，只會排一次、第二個人拿到「已在處理中」的回應。完成後結果進 `IMemoryCache` 1 小時，期間再問會直接回 cache。
+- **[GeminiTaskScheduleService.cs](SummaryAndCheck/Services/GeminiTaskScheduleService.cs)** — 背景輪詢 `SummaryQueue`；`SemaphoreSlim(2)` 限並發、`hardTaskExcutionLimit = 5 min` 限單工作時間。每個任務起一個 DI scope 拿 `GeminiService` 執行。沒有 API Key 時會原地待 5 秒再檢查，這樣改完 `SystemConfig` 不必重啟。
+- **[GeminiService.cs](SummaryAndCheck/Services/GeminiService.cs)** — 組 prompt（從 `GeminiOptions.Prompts` / `WebPrompts` 走 LightI18n 處理），用 `GenerateContentStreamAsync` 串流接收，以換行為邊界漸進式寫進 Discord 訊息（見 `DiscordMessageManager`）。結束時依 `UsageMetadata` + `GeminiOptions` 的單價表算 USD 成本寫回訊息末尾。
+- **[WebCaptureService.cs](SummaryAndCheck/Services/WebCaptureService.cs)** + **[WebCapturePatches.cs](SummaryAndCheck/Services/WebCapturePatches.cs)** — Playwright 啟 Chromium，載入目標網頁，注入 [Readability.js](SummaryAndCheck/assets/Readability.js)（embedded resource）萃取主體內容。Patches 檔處理常見 bot 偵測的 workaround；要驗證效果可以用 [AntiBot 除錯模式](#antibot-除錯模式)。
+- **[DbConfigureOptions.cs](SummaryAndCheck/DbConfigureOptions.cs)** — 把 `SystemConfig` 表翻譯成 `IOptions<T>`。`Scope` = Options 類別名稱，`Key` = property 名（可用 `[ConfigKey("別名")]` 或 `[IgnoreConfig]` 調整）。值是字串，靠 `Convert.ChangeType` 對應到 property 型別。
+
+### 資料模型重點
+
+- [DiscordUser](SummaryAndCheck.Models/DiscordUser.cs)：使用者 + `IsEnabled` + `Credit` + `LastFreeUse`。`SummaryService` 同時支援兩種扣費：30 分鐘一次的免費使用，或扣 1 點 Credit。
+- [CreditHistory](SummaryAndCheck.Models/CreditHistory.cs) + 子類：所有額度變動都留紀錄（使用、加值、Admin 調整）。
+- [SystemConfig](SummaryAndCheck.Models/SystemConfig.cs)：執行期組態的 KV 儲存（見上）。
+- [PasskeyStorage](SummaryAndCheck.Models/PasskeyStorage.cs)：AdminInterface WebAuthn 用。
+
+### 目前沒做的事
+
+- Migrations 存在但實際走 `EnsureCreated`，要正式上線前應該二擇一。
+- AdminInterface 頁面只有雛形（見 [後台](#後台-wip)）。
+- 沒有 bot 主程式層級的整合測試。
+
 ## 需求
 
 - .NET SDK 10.0
