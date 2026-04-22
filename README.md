@@ -121,7 +121,7 @@ docker build -t summary-and-check:dev .
 ./build_save_docker.ps1
 ```
 
-產出檔案格式為 `summary-and-check_<version>.tar`（repo 內已有幾個歷史版本的 tar）。
+產出檔案格式為 `summary-and-check_<version>.tar`。這些 tar 是 `.gitignore` 的，**不要推上 repo** — Docker image 內會把 build 時的 appsettings / `local.json` 打包進去，含有連線字串等敏感資料。
 
 執行時記得把組態掛進去：
 
