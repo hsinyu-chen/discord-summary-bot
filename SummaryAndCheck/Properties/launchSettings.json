@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SummaryAndCheck": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}

@@ -1,0 +1,150 @@
+@page "/discord-users"
+@using SummaryAndCheck.Models
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@inject SummaryAndCheckDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@attribute [Authorize]
+
+<h3>Discord Users</h3>
+
+@if (users == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Credit</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in users)
+            {
+                <tr>
+                    <td>@user.Id</td>
+                    <td>@user.Name</td>
+                    <td>@user.Credit.ToString("N2")</td>
+                    <td>
+                        <span class="badge @(user.IsEnabled ? "bg-success" : "bg-secondary")">
+                            @(user.IsEnabled ? "Active" : "Inactive")
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenCreditModal(user)">Credits</button>
+                        <button class="btn btn-sm btn-outline-warning" @onclick="() => ToggleStatus(user)">Toggle Status</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (selectedUser != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Manage Credits: @selectedUser.Name</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Amount (Use negative to deduct)</label>
+                        <input type="number" class="form-control" @bind="creditAmount" step="0.01" />
+                    </div>
+                    <div class="mb-3">
+                        <label>Reason</label>
+                        <input type="text" class="form-control" @bind="creditReason" placeholder="Reason for adjustment" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Close</button>
+                    <button type="button" class="btn btn-primary" @onclick="SubmitCreditAdjustment">Save changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DiscordUser>? users;
+    private DiscordUser? selectedUser;
+    private decimal creditAmount;
+    private string creditReason = "";
+    private int? currentAdminId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+        
+        // Get Admin ID from claims? Or map username to AppUser to get ID?
+        // Since we didn't store AppUserID in claims, we might need to lookup.
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var username = authState.User.Identity?.Name;
+        if (!string.IsNullOrEmpty(username))
+        {
+            var admin = await Db.AppUsers.FirstOrDefaultAsync(u => u.Username == username);
+            if (admin != null) currentAdminId = admin.Id;
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        // Assuming we want to show all users, paging should be considered for large datasets but version 1 demands list.
+        users = await Db.DiscordUsers.OrderBy(u => u.Id).ToListAsync();
+    }
+
+    private async Task ToggleStatus(DiscordUser user)
+    {
+        user.IsEnabled = !user.IsEnabled;
+        await Db.SaveChangesAsync();
+    }
+
+    private void OpenCreditModal(DiscordUser user)
+    {
+        selectedUser = user;
+        creditAmount = 0;
+        creditReason = "";
+    }
+
+    private void CloseModal()
+    {
+        selectedUser = null;
+    }
+
+    private async Task SubmitCreditAdjustment()
+    {
+        if (selectedUser == null || currentAdminId == null) return;
+        if (creditAmount == 0) return; // or warning
+        if (string.IsNullOrWhiteSpace(creditReason)) return; // warning
+
+        // Update User Credits
+        selectedUser.Credit += creditAmount;
+
+        // Create Admin History
+        var history = new CreditAdminHistory
+        {
+            HistoryTime = DateTimeOffset.UtcNow,
+            ValueChanged = creditAmount,
+            DiscordUserId = selectedUser.Id,
+            DiscordUser = selectedUser,
+            HistoryType = CreditHistoryType.AdminAdjustment,
+            Reason = creditReason,
+            AdminId = currentAdminId.Value
+        };
+
+        Db.CreditHistories.Add(history);
+        
+        await Db.SaveChangesAsync();
+        CloseModal();
+    }
+}

@@ -1,0 +1,59 @@
+﻿{
+  "Localization": {
+    "zh-TW": {
+      "Common": {
+        "Cached": "這個之前處理過了 {{link}}"
+      },
+      "SummaryMessageCommand": {
+        "Queued": "等待中，目前有 {{queueNumber}} 人在佇列中(這個數字不會即時更新)。",
+        "NoCredit": "點數不足！AI 是要錢的！ (免費請求還要{{min}}分鐘)",
+        "NoBotAccess": "無Bot權限",
+        "NotSupported": "僅支援 YouTube 影片。",
+        "AccountNotEnabled": "帳號(尚)未啟用。"
+      },
+      "SummaryContextCommand": {
+        "Name": "摘要Youtube"
+      },
+      "SummaryWebCommand": {
+        "NoCredit": "點數不足！AI 是要錢的！ (免費請求還要{{min}}分鐘)",
+        "CommandName": "摘要網頁",
+        "NoUrlFoundInMessage": "在選取的訊息中找不到有效的網址。",
+        "Queued": "已排入佇列：您的請求是第 {{queueNumber}} 個。",
+        "NotSupported": "此摘要類型不受支援或發生錯誤。"
+      },
+      "RequestAccessCommand": {
+        "Description": "請求Bot使用權限",
+        "Success": "申請成功 , 目前帳號狀態 : `{{state}}`",
+        "Enabled": "已啟用",
+        "NotEnabled": "尚未啟用"
+      },
+      "SummaryCommand": {
+        "CommandDescription": "總結 YouTube 影片！"
+      },
+      "GeminiService": {
+        "Processing": "Gemini努力中..({{waiting}}s)",
+        "Declaimer": "-# (AI 產生內容可能不準確)",
+        "GeminiError": "Gemini 壞掉了!!",
+        "GeminiNoResponse": "Gemini 沒有回應，可能影片不支援或者google bug了",
+        "UnexpectedStop": "Gemini 意外停止回應 ,原因 : `{{reason}}`",
+        "ReadingWeb": "正在讀取網頁..",
+        "ReadingWebError": "無法讀取網頁",
+        "AICost": "-# (AI 資訊 :模型 `{{model}}` , 輸入 `{{input:#,#0}}` Tokens , 輸出 `{{output:#,#0}}` Tokens , 價格 `{{price:N}} USD`)",
+        "FinishReason": {
+          "DEFAULT_VALUE": "預設值。此值未使用。",
+          "STOP": "模型自然停止，或已達到預設的結束標記。",
+          "MAX_TOKENS": "已達到最大輸出字元數限制。",
+          "SAFETY": "回應內容因安全審核被阻擋。",
+          "RECITATION": "回應內容因涉及重複或引用他人內容被標記。",
+          "LANGUAGE": "回應內容因使用了不支援的語言。",
+          "OTHER": "未知原因。",
+          "BLOCKLIST": "因內容包含禁用詞彙而停止生成。",
+          "PROHIBITED_CONTENT": "因內容可能包含違禁內容而停止生成。",
+          "SPII": "因內容可能包含敏感個人識別資訊 (SPII) 而停止生成。",
+          "MALFORMED_FUNCTION_CALL": "模型生成的函式呼叫格式錯誤或無效。",
+          "IMAGE_SAFETY": "因生成的圖像包含安全違規而停止生成。"
+        }
+      }
+    }
+  }
+}

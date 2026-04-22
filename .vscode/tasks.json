@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build AdminInterface",
+      "type": "dotnet",
+      
+      "command": "dotnet build",
+      "args": [
+        "${workspaceFolder}/AdminInterface/AdminInterface.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "new",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": "$msBuild"
+    },
+    {
+      "label": "publish AdminInterface",
+      "type": "dotnet",
+      "command": "dotnet publish",
+      "args": [
+        "${workspaceFolder}/AdminInterface/AdminInterface.csproj",
+        "-c",
+        "Release",
+        "-o",
+        "${workspaceFolder}/AdminInterface/bin/Publish"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "new",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": "$msBuild"
+    }
+  ]
+}

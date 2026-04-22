@@ -1,0 +1,58 @@
+@page "/LoginPage"
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+@inject Services.AuthService AuthService
+@inject NavigationManager Nav
+
+<div class="login-container">
+    <h3>Admin Login</h3>
+
+    <div class="mb-3">
+        <label>Username</label>
+        <input @bind="username" class="form-control" />
+    </div>
+
+    <button @onclick="PerformLogin" class="btn btn-primary">Login with Passkey</button>
+    <button @onclick="Register" class="btn btn-secondary">Register New Device</button>
+    
+    <p class="text-danger">@message</p>
+</div>
+
+@code {
+    private string username = "";
+    private string message = "";
+
+    private async Task PerformLogin()
+    {
+        message = "Starting login...";
+        try 
+        {
+            var options = await AuthService.InitLoginAsync(username);
+            var credential = await JS.InvokeAsync<string>("webauthn.login", options);
+            var success = await AuthService.CompleteLoginAsync(credential, username);
+            if (success) Nav.NavigateTo("/");
+            else message = "Login failed.";
+        }
+        catch (Exception ex)
+        {
+            message = $"Login error: {ex.Message}";
+        }
+    }
+
+    private async Task Register()
+    {
+        message = "Starting registration...";
+        try
+        {
+            var options = await AuthService.InitRegisterAsync(username, username);
+            var credential = await JS.InvokeAsync<string>("webauthn.register", options);
+            var success = await AuthService.CompleteRegisterAsync(credential, username);
+            if (success) message = "Registered! Pending approval.";
+            else message = "Registration failed.";
+        }
+        catch (Exception ex)
+        {
+            message = $"Register error: {ex.Message}";
+        }
+    }
+}

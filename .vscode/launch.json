@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AdminInterface",
+      "type": "dotnet",
+      "request": "launch",
+      "project": "${workspaceFolder}/AdminInterface/AdminInterface.csproj",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "sourceFileMap": {
+        "/Views": "${workspaceFolder}/AdminInterface/Views"
+      }
+    }
+  ]
+}

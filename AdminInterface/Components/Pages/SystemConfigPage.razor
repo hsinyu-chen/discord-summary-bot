@@ -1,0 +1,85 @@
+@page "/config"
+@using SummaryAndCheck.Models
+@using Microsoft.EntityFrameworkCore
+@inject SummaryAndCheckDbContext Db
+@attribute [Authorize]
+
+<h3>System Configuration</h3>
+
+@if (configs == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Scope</th>
+                <th>Key</th>
+                <th>Value</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var config in configs)
+            {
+                <tr>
+                    <td>@config.Scope</td>
+                    <td>@config.Key</td>
+                    <td>
+                        @if (editingKey == config.Key)
+                        {
+                            <input @bind="editValue" />
+                        }
+                        else
+                        {
+                            @config.Value
+                        }
+                    </td>
+                    <td>
+                        @if (editingKey == config.Key)
+                        {
+                            <button class="btn btn-sm btn-success" @onclick="() => Save(config)">Save</button>
+                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-primary" @onclick="() => Edit(config)">Edit</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<SystemConfig>? configs;
+    private string? editingKey;
+    private string? editValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        configs = await Db.SystemConfigs.ToListAsync();
+    }
+
+    private void Edit(SystemConfig config)
+    {
+        editingKey = config.Key;
+        editValue = config.Value;
+    }
+
+    private void CancelEdit()
+    {
+        editingKey = null;
+        editValue = null;
+    }
+
+    private async Task Save(SystemConfig config)
+    {
+        config.Value = editValue ?? "";
+        await Db.SaveChangesAsync();
+        editingKey = null;
+    }
+}
