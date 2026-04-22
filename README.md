@@ -86,7 +86,7 @@ GeminiService (scoped)          ← 組 prompt、streaming 呼叫 Gemini、
 ## 需求
 
 - .NET SDK 10.0
-- PostgreSQL (一個主資料庫 + 一個寫 Serilog log 的資料庫，可以是同一台)
+- 任何 EF Core 支援的資料庫。目前 [Program.cs](SummaryAndCheck/Program.cs) 用 `UseNpgsql` 接 PostgreSQL（主資料庫 + Serilog log 資料庫，可以是同一台），要換別家就換對應的 EF Core provider 套件 + 改那行；Serilog 那邊則換成對應的 sink。
 - Google Gemini API Key
 - Discord Bot Token
 - **Playwright + Chromium**：`WebCaptureService` 用 Playwright 抓網頁內容（含繞過部分 bot 偵測的 patch），所以本機第一次跑之前要先裝 browser。先 build 一次，然後執行 Playwright 的安裝 script：
