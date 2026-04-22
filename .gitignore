@@ -362,5 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# VSCode workstation-specific settings (absolute paths etc.)
+# VSCode workstation-specific settings (absolute paths, local debug config)
 .vscode/settings.json
+.vscode/launch.json
